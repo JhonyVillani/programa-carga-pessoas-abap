@@ -115,13 +115,16 @@ CLASS lcl_carga IMPLEMENTATION.
 
   ENDMETHOD.                    "leitura_dados
   METHOD processamento.
-    DATA: ls_dados TYPE ty_s_dados,
-          lo_pessoa TYPE REF TO zabaptrcl02_jm,
-          lo_except TYPE REF TO zcx_abaptr01_jm,
-          lv_message TYPE string.
+    DATA: ls_dados   TYPE ty_s_dados,
+          lo_pessoa  TYPE REF TO zabaptrcl02_jm,
+          lo_except  TYPE REF TO zcx_abaptr01_jm,
+          lv_message TYPE string,
+          lv_tabix   TYPE sytabix.
 
 *   Para cada linha na tabela mt_dados com as informações resgatadas, popular um objeto
     LOOP AT mt_dados INTO ls_dados.
+
+      lv_tabix = sy-tabix.
 
       CLEAR: lv_message.
 
@@ -159,7 +162,6 @@ CLASS lcl_carga IMPLEMENTATION.
 
               CALL METHOD lo_pessoa->delete.
 
-
             WHEN OTHERS.
               lv_message = 'Operação invalida.'.
           ENDCASE.
@@ -167,6 +169,18 @@ CLASS lcl_carga IMPLEMENTATION.
         CATCH zcx_abaptr01_jm INTO lo_except.
           lv_message = lo_except->get_text( ).
       ENDTRY.
+
+      IF lv_message IS INITIAL.
+        ls_dados-sts = icon_led_green.
+        ls_dados-msg = 'Operação realizada com sucesso!'.
+      ELSE.
+        ls_dados-sts = icon_led_red.
+        ls_dados-msg = lv_message.
+      ENDIF.
+
+*     Para realizar as alterações realizadas na estrutura na tabela, precisamos realizar um modify
+      MODIFY mt_dados FROM ls_dados INDEX lv_tabix.
+
     ENDLOOP.
 
   ENDMETHOD.                    "processamento
