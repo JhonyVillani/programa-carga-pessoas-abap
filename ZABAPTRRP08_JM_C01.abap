@@ -132,7 +132,7 @@ CLASS lcl_carga IMPLEMENTATION.
           CLEAR: lo_pessoa. "Destruir o objeto pessoa para evitar sujeira
           CREATE OBJECT lo_pessoa.
 
-*     Para sabermos o que fazer com os dados, precisamos saber qual operação o usuário precisa
+*         Para sabermos o que fazer com os dados, precisamos saber qual operação o usuário precisa
           CASE ls_dados-oper.
             WHEN 'C'. "Criar
               CALL METHOD lo_pessoa->create
@@ -185,6 +185,20 @@ CLASS lcl_carga IMPLEMENTATION.
 
   ENDMETHOD.                    "processamento
   METHOD log.
+
+*   Necessário declarar uma variável para a classe do ALV
+    DATA: mo_alv TYPE REF TO cl_salv_table.
+
+*   Criando o relatório ALV, declarando na classe a variáveis mo_alv referenciando cl_salv_table
+*   Chama o método que constrói a saída ALV
+    CALL METHOD cl_salv_table=>factory
+      IMPORTING
+        r_salv_table = mo_alv
+      CHANGING
+        t_table      = mt_dados. "Necessário passar a tabela final dos dados mt_dados
+
+*   Mostra o ALV
+    mo_alv->display( ). "Imprime na tela do relatório ALV
 
   ENDMETHOD.                    "log
   METHOD get_file.
