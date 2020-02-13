@@ -10,7 +10,7 @@
 CLASS lcl_carga DEFINITION.
   PUBLIC SECTION.
     TYPES:
-      BEGIN OF ty_s_arquivo,
+      BEGIN OF ty_s_dados,
         oper  TYPE zabaptrde14_jm,
         cpf   TYPE zabaptrde09_jm,
         nome  TYPE zabaptrde10_jm,
@@ -19,12 +19,12 @@ CLASS lcl_carga DEFINITION.
         sexo  TYPE zabaptrde13_jm,
         sts   TYPE icon_d,   "Elemento de dados Standard
         msg   TYPE bapi_msg, "Elemento de dados Standard
-     END OF ty_s_arquivo,
+     END OF ty_s_dados.
 
-      ty_t_fn TYPE TABLE OF ty_s_arquivo.
+    DATA: mt_dados TYPE TABLE OF ty_s_dados.
 
     METHODS:
-    leitura_arquivo
+    leitura_dados
       IMPORTING iv_file TYPE rlgrap-filename,
     processamento,
     log.
@@ -41,7 +41,7 @@ ENDCLASS.                    "lcl_carga DEFINITION
 *
 *----------------------------------------------------------------------*
 CLASS lcl_carga IMPLEMENTATION.
-  METHOD leitura_arquivo.
+  METHOD leitura_dados.
 
 *   Types para definir um tipo string de 1000 chars e ser utilizado no método da classe como tipo (de complexo para) simples
     TYPES:
@@ -52,17 +52,17 @@ CLASS lcl_carga IMPLEMENTATION.
     DATA: lv_filename  TYPE string, "O método filename precisa do caminho em forma de String
           ls_file_line TYPE ty_file_line,
           lt_file_data TYPE TABLE OF ty_file_line,
-          ls_dados     TYPE ty_s_arquivo.
+          ls_dados     TYPE ty_s_dados.
 
-    lv_filename = iv_file. "Atribuímos o caminho do arquivo para a variável do tipo String
+    lv_filename = iv_file. "Atribuímos o caminho do dados para a variável do tipo String
 
-*   Método para importar o arquivo no SAP e armazenar em data_tab
+*   Método para importar o dados no SAP e armazenar em data_tab
     CALL METHOD cl_gui_frontend_services=>gui_upload
       EXPORTING
         filename                = lv_filename
         filetype                = 'ASC'
       CHANGING
-        data_tab                = lt_file_data "Saída do arquivo, linhas com Strings gigantes
+        data_tab                = lt_file_data "Saída do dados, linhas com Strings gigantes
       EXCEPTIONS
         file_open_error         = 1
         file_read_error         = 2
@@ -95,18 +95,79 @@ CLASS lcl_carga IMPLEMENTATION.
 
 ********************************************************************** END Teste
 
+*   Para cada linha na tabela de Strings
     LOOP AT lt_file_data INTO ls_file_line.
-      SPLIT ls_file_line-line AT ';' INTO ls_dados-oper
+
+      IF sy-tabix = 1. "Contador do SAP, inicia em 1
+        CONTINUE.
+      ENDIF.
+
+      SPLIT ls_file_line-line AT ';' INTO ls_dados-oper "Separa por ';' e armazena na estrutura ls_dados-ORDEMdoCAMPO
                                           ls_dados-cpf
                                           ls_dados-nome
                                           ls_dados-data
                                           ls_dados-nacio
                                           ls_dados-sexo.
 
+      APPEND ls_dados TO mt_dados.
+
     ENDLOOP.
 
-  ENDMETHOD.                    "leitura_arquivo
+  ENDMETHOD.                    "leitura_dados
   METHOD processamento.
+    DATA: ls_dados TYPE ty_s_dados,
+          lo_pessoa TYPE REF TO zabaptrcl02_jm,
+          lo_except TYPE REF TO zcx_abaptr01_jm,
+          lv_message TYPE string.
+
+*   Para cada linha na tabela mt_dados com as informações resgatadas, popular um objeto
+    LOOP AT mt_dados INTO ls_dados.
+
+      CLEAR: lv_message.
+
+      TRY .
+          CLEAR: lo_pessoa. "Destruir o objeto pessoa para evitar sujeira
+          CREATE OBJECT lo_pessoa.
+
+*     Para sabermos o que fazer com os dados, precisamos saber qual operação o usuário precisa
+          CASE ls_dados-oper.
+            WHEN 'C'. "Criar
+              CALL METHOD lo_pessoa->create
+                EXPORTING
+                  iv_cpf           = ls_dados-cpf
+                  iv_nome          = ls_dados-nome
+                  iv_datanasc      = ls_dados-data
+                  iv_nacionalidade = ls_dados-nacio
+                  iv_sexo          = ls_dados-sexo.
+
+            WHEN 'M'. "Modificar
+              CALL METHOD lo_pessoa->buscar
+                EXPORTING
+                  iv_cpf = ls_dados-cpf.
+
+              CALL METHOD lo_pessoa->modify
+                EXPORTING
+                  iv_nome          = ls_dados-nome
+                  iv_datanasc      = ls_dados-data
+                  iv_nacionalidade = ls_dados-nacio
+                  iv_sexo          = ls_dados-sexo.
+
+            WHEN 'E'. "Excluir
+              CALL METHOD lo_pessoa->buscar
+                EXPORTING
+                  iv_cpf = ls_dados-cpf.
+
+              CALL METHOD lo_pessoa->delete.
+
+
+            WHEN OTHERS.
+              lv_message = 'Operação invalida.'.
+          ENDCASE.
+
+        CATCH zcx_abaptr01_jm INTO lo_except.
+          lv_message = lo_except->get_text( ).
+      ENDTRY.
+    ENDLOOP.
 
   ENDMETHOD.                    "processamento
   METHOD log.
@@ -117,10 +178,10 @@ CLASS lcl_carga IMPLEMENTATION.
           ls_file      TYPE file_table, "Estrutura work-area auxiliar
           lv_rc        TYPE i.
 
-*   Método para tela de diálogo para localização de endereço de arquivo local
+*   Método para tela de diálogo para localização de endereço de dados local
     CALL METHOD cl_gui_frontend_services=>file_open_dialog
       EXPORTING
-        window_title            = 'Selecione o arquivo.'
+        window_title            = 'Selecione os dados.'
         initial_directory       = 'C:\Users\ITZ37\Downloads\'
         multiselection          = space "Space é o mesmo que FALSE
       CHANGING
